@@ -1,3 +1,15 @@
+using System.Data.SQLite;
+
+string connstr = "Data Source=MyDatabase.sqlite;Version=3;";
+using (SQLiteConnection connection = new SQLiteConnection(connstr)) {
+	connection.Open();
+
+	SQLiteCommand command = connection.CreateCommand();
+	command.CommandText = "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, body TEXT, User INTEGER);";
+
+	command.ExecuteNonQuery();
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.

@@ -1,3 +1,4 @@
+using System.Data.SQLite;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SecureChatServer.Controllers;
@@ -12,8 +13,22 @@ public class MessageController : ControllerBase {
 
 	[HttpPost]
 	public void Post(Message message) {
-		Console.WriteLine(message.Text);
-		Console.WriteLine(message.User.Modulus);
-		Console.WriteLine(message.User.Exponent);
+		string connstr = "Data Source=MyDatabase.sqlite;Version=3;";
+		using (SQLiteConnection connection = new (connstr)) {
+			connection.Open();
+
+			SQLiteCommand command = connection.CreateCommand();
+			command.CommandText = "INSERT INTO messages (body, user) VALUES (@body, @user);";
+			command.Parameters.AddWithValue("@body", message.Text);
+			command.Parameters.AddWithValue("@user", 1);
+			command.ExecuteNonQuery();
+
+			command.Parameters.Clear();
+
+			command.CommandText = "SELECT * FROM messages;";
+			using SQLiteDataReader reader = command.ExecuteReader();
+			while (reader.Read())
+				Console.WriteLine($"{reader["id"]}: {reader["body"]}");
+		}
 	}
 }

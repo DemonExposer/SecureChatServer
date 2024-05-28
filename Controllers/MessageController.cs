@@ -8,32 +8,41 @@ namespace SecureChatServer.Controllers;
 public class MessageController : ControllerBase {
 	[HttpGet]
 	public Message[] Get(string modulus, string exponent) {
+		List<Message> res = new ();
 		using (SQLiteConnection connection = new (Constants.DbConnectionString)) {
 			connection.Open();
 
 			SQLiteCommand command = connection.CreateCommand();
-			command.CommandText = "";
+			command.CommandText = "SELECT * FROM messages LEFT JOIN users ON messages.user = users.id WHERE users.modulus = @modulus AND users.exponent = @exponent;";
+			command.Parameters.AddWithValue("@modulus", modulus);
+			command.Parameters.AddWithValue("@exponent", exponent);
+
+			using SQLiteDataReader reader = command.ExecuteReader();
+
+			while (reader.Read())
+				res.Add(new Message { DateTime = DateTime.Now, Text = (string) reader["body"], User = new User { Modulus = (string) reader["modulus"], Exponent = (string) reader["exponent"] } });
 		}
-		return new[] { new Message { DateTime = DateTime.Now, Text = "hello", User = new User { Modulus = "123", Exponent = "123"} } };
+
+		return res.ToArray();
 	}
 
 	[HttpPost]
 	public void Post(Message message) {
-		using (SQLiteConnection connection = new (Constants.DbConnectionString)) {
-			connection.Open();
+		using SQLiteConnection connection = new (Constants.DbConnectionString);
+		connection.Open();
 
-			SQLiteCommand command = connection.CreateCommand();
-			command.CommandText = "INSERT INTO messages (body, user) VALUES (@body, @user);";
-			command.Parameters.AddWithValue("@body", message.Text);
-			command.Parameters.AddWithValue("@user", 1);
-			command.ExecuteNonQuery();
+		SQLiteCommand command = connection.CreateCommand();
+		command.CommandText = "INSERT OR IGNORE INTO users (modulus, exponent) VALUES (@modulus, @exponent);";
+		command.Parameters.AddWithValue("@modulus", message.User.Modulus);
+		command.Parameters.AddWithValue("@exponent", message.User.Exponent);
+		command.ExecuteNonQuery();
 
-			command.Parameters.Clear();
+		command.Parameters.Clear();
 
-			command.CommandText = "SELECT * FROM messages;";
-			using SQLiteDataReader reader = command.ExecuteReader();
-			while (reader.Read())
-				Console.WriteLine($"{reader["id"]}: {reader["body"]}");
-		}
+		command.CommandText = "INSERT INTO messages (body, user) SELECT @body, id FROM users WHERE modulus = @modulus AND exponent = @exponent;";
+		command.Parameters.AddWithValue("@body", message.Text);
+		command.Parameters.AddWithValue("@modulus", message.User.Modulus);
+		command.Parameters.AddWithValue("@exponent", message.User.Exponent);
+		command.ExecuteNonQuery();
 	}
 }

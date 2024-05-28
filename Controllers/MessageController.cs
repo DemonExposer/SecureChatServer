@@ -7,14 +7,19 @@ namespace SecureChatServer.Controllers;
 [Route("messages")]
 public class MessageController : ControllerBase {
 	[HttpGet]
-	public Message[] Get() {
+	public Message[] Get(string modulus, string exponent) {
+		using (SQLiteConnection connection = new (Constants.DbConnectionString)) {
+			connection.Open();
+
+			SQLiteCommand command = connection.CreateCommand();
+			command.CommandText = "";
+		}
 		return new[] { new Message { DateTime = DateTime.Now, Text = "hello", User = new User { Modulus = "123", Exponent = "123"} } };
 	}
 
 	[HttpPost]
 	public void Post(Message message) {
-		string connstr = "Data Source=MyDatabase.sqlite;Version=3;";
-		using (SQLiteConnection connection = new (connstr)) {
+		using (SQLiteConnection connection = new (Constants.DbConnectionString)) {
 			connection.Open();
 
 			SQLiteCommand command = connection.CreateCommand();

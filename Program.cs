@@ -1,11 +1,13 @@
 using System.Data.SQLite;
 
-string connstr = "Data Source=MyDatabase.sqlite;Version=3;";
-using (SQLiteConnection connection = new SQLiteConnection(connstr)) {
+using (SQLiteConnection connection = new (SecureChatServer.Constants.DbConnectionString)) {
 	connection.Open();
 
 	SQLiteCommand command = connection.CreateCommand();
-	command.CommandText = "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, body TEXT, User INTEGER);";
+	command.CommandText = @"
+		CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, body TEXT, user INTEGER);
+		CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, modulus TEXT, exponent TEXT);
+	";
 
 	command.ExecuteNonQuery();
 }

@@ -19,8 +19,8 @@ public class MessageController : ControllerBase {
 
 			using SQLiteDataReader reader = command.ExecuteReader();
 
-			while (reader.Read())
-				res.Add(new Message { DateTime = DateTime.Now, Text = (string) reader["body"], User = new User { Modulus = (string) reader["modulus"], Exponent = (string) reader["exponent"] } });
+		//	while (reader.Read())
+		//		res.Add(new Message { DateTime = DateTime.Now, Text = (string) reader["body"], User = new User { Modulus = (string) reader["modulus"], Exponent = (string) reader["exponent"] } });
 		}
 
 		return res.ToArray();
@@ -33,16 +33,48 @@ public class MessageController : ControllerBase {
 
 		SQLiteCommand command = connection.CreateCommand();
 		command.CommandText = "INSERT OR IGNORE INTO users (modulus, exponent) VALUES (@modulus, @exponent);";
-		command.Parameters.AddWithValue("@modulus", message.User.Modulus);
-		command.Parameters.AddWithValue("@exponent", message.User.Exponent);
+		command.Parameters.AddWithValue("@modulus", message.Sender.Modulus);
+		command.Parameters.AddWithValue("@exponent", message.Sender.Exponent);
 		command.ExecuteNonQuery();
 
 		command.Parameters.Clear();
 
-		command.CommandText = "INSERT INTO messages (body, user) SELECT @body, id FROM users WHERE modulus = @modulus AND exponent = @exponent;";
+		command.CommandText = "INSERT OR IGNORE INTO users (modulus, exponent) VALUES (@modulus, @exponent);";
+		command.Parameters.AddWithValue("@modulus", message.Receiver.Modulus);
+		command.Parameters.AddWithValue("@exponent", message.Receiver.Exponent);
+		command.ExecuteNonQuery();
+
+		command.Parameters.Clear();
+
+		command.CommandText = "SELECT id FROM users WHERE modulus = @modulus AND exponent = @exponent;";
+		command.Parameters.AddWithValue("@modulus", message.Sender.Modulus);
+		command.Parameters.AddWithValue("@exponent", message.Sender.Exponent);
+		long senderId;
+		using (SQLiteDataReader reader = command.ExecuteReader()) {
+			reader.Read();
+			senderId = (long) reader["id"];
+		}
+
+		command.Parameters.Clear();
+
+		command.CommandText = "SELECT id FROM users WHERE modulus = @modulus AND exponent = @exponent;";
+		command.Parameters.AddWithValue("@modulus", message.Receiver.Modulus);
+		command.Parameters.AddWithValue("@exponent", message.Receiver.Exponent);
+		long receiverId;
+		using (SQLiteDataReader reader = command.ExecuteReader()) {
+			reader.Read();
+			receiverId = (long) reader["id"];
+		}
+
+		command.Parameters.Clear();
+
+		command.CommandText = "INSERT INTO messages (body, sender, receiver, sender_encrypted_key, receiver_encrypted_key, signature) VALUES (@body, @sender, @receiver, @senderEncKey, @receiverEncKey, @signature);";
 		command.Parameters.AddWithValue("@body", message.Text);
-		command.Parameters.AddWithValue("@modulus", message.User.Modulus);
-		command.Parameters.AddWithValue("@exponent", message.User.Exponent);
+		command.Parameters.AddWithValue("@sender", senderId);
+		command.Parameters.AddWithValue("@receiver", receiverId);
+		command.Parameters.AddWithValue("@senderEncKey", message.SenderEncryptedKey);
+		command.Parameters.AddWithValue("@receiverEncKey", message.ReceiverEncryptedKey);
+		command.Parameters.AddWithValue("@signature", message.Signature);
 		command.ExecuteNonQuery();
 	}
 }

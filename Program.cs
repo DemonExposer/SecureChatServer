@@ -6,7 +6,7 @@ using (SQLiteConnection connection = new (SecureChatServer.Constants.DbConnectio
 	SQLiteCommand command = connection.CreateCommand();
 	command.CommandText = @"
 		CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, body TEXT, user INTEGER);
-		CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, modulus TEXT, exponent TEXT);
+		CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, modulus TEXT UNIQUE, exponent TEXT);
 	";
 
 	command.ExecuteNonQuery();

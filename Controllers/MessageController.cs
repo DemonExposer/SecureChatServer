@@ -7,20 +7,63 @@ namespace SecureChatServer.Controllers;
 [Route("messages")]
 public class MessageController : ControllerBase {
 	[HttpGet]
-	public Message[] Get(string modulus, string exponent) {
+	public Message[] Get(string requestingUserModulus, string requestingUserExponent, string requestedUserModulus, string requestedUserExponent) {
 		List<Message> res = new ();
 		using (SQLiteConnection connection = new (Constants.DbConnectionString)) {
 			connection.Open();
 
 			SQLiteCommand command = connection.CreateCommand();
-			command.CommandText = "SELECT * FROM messages LEFT JOIN users ON messages.user = users.id WHERE users.modulus = @modulus AND users.exponent = @exponent;";
-			command.Parameters.AddWithValue("@modulus", modulus);
-			command.Parameters.AddWithValue("@exponent", exponent);
+			command.CommandText = "SELECT * FROM users WHERE modulus = @modulus1 AND exponent = @exponent1 OR modulus = @modulus2 AND exponent = @exponent2;";
+			command.Parameters.AddWithValue("@modulus1", requestingUserModulus);
+			command.Parameters.AddWithValue("@exponent1", requestingUserExponent);
+			command.Parameters.AddWithValue("@modulus2", requestedUserModulus);
+			command.Parameters.AddWithValue("@exponent2", requestedUserExponent);
 
-			using SQLiteDataReader reader = command.ExecuteReader();
+			long requestingUserId = -1, requestedUserId = -1;
+			using (SQLiteDataReader reader = command.ExecuteReader())
+				while (reader.Read())
+					if ((string) reader["modulus"] == requestingUserModulus)
+						requestingUserId = (long) reader["id"];
+					else if ((string) reader["modulus"] == requestedUserModulus)
+						requestedUserId = (long) reader["id"];
 
-		//	while (reader.Read())
-		//		res.Add(new Message { DateTime = DateTime.Now, Text = (string) reader["body"], User = new User { Modulus = (string) reader["modulus"], Exponent = (string) reader["exponent"] } });
+			if (requestingUserId == -1 || requestedUserId == -1)
+				return res.ToArray();
+
+			command.Parameters.Clear();
+
+			command.CommandText = "SELECT * FROM messages WHERE sender = @requesterId AND receiver = @requestedId OR sender = @requestedId AND receiver = @requesterId;";
+			command.Parameters.AddWithValue("@requesterId", requestingUserId);
+			command.Parameters.AddWithValue("@requestedId", requestedUserId);
+
+			using (SQLiteDataReader reader = command.ExecuteReader()) {
+				while (reader.Read()) {
+					string senderModulus, senderExponent, receiverModulus, receiverExponent;
+					if ((long) reader["sender"] == requestingUserId) {
+						senderModulus = requestingUserModulus;
+						senderExponent = requestingUserExponent;
+						receiverModulus = requestedUserModulus;
+						receiverExponent = requestedUserExponent;
+					} else {
+						senderModulus = requestedUserModulus;
+						senderExponent = requestedUserExponent;
+						receiverModulus = requestingUserModulus;
+						receiverExponent = requestingUserExponent;
+					}
+
+					res.Add(
+						new Message {
+							DateTime = DateTime.Now,
+							Text = (string) reader["body"],
+							ReceiverEncryptedKey = (string) reader["receiver_encrypted_key"],
+							SenderEncryptedKey = (string) reader["sender_encrypted_key"],
+							Signature = (string) reader["signature"],
+							Sender = new User { Modulus = senderModulus, Exponent = senderExponent },
+							Receiver = new User { Modulus = receiverModulus, Exponent = receiverExponent }
+						}
+					);
+				}
+			}
 		}
 
 		return res.ToArray();

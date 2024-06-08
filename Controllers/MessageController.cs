@@ -1,4 +1,8 @@
 using System.Data.SQLite;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SecureChatServer.Controllers;
@@ -119,5 +123,24 @@ public class MessageController : ControllerBase {
 		command.Parameters.AddWithValue("@receiverEncKey", message.ReceiverEncryptedKey);
 		command.Parameters.AddWithValue("@signature", message.Signature);
 		command.ExecuteNonQuery();
+
+		BroadcastToWebsockets(message).Wait();
+	}
+
+	private static async Task BroadcastToWebsockets(Message message) {
+		bool webSocketExists = WebSocketController.Sockets.TryGetValue(message.Receiver.Modulus, out WebSocket? webSocket);
+		if (!webSocketExists || webSocket == null)
+			return;
+
+		// TODO: remove the websocket if the send fails
+		await webSocket.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new JsonObject {
+			["signature"] = message.Signature,
+			["sender"] = new JsonObject {
+				["modulus"] = message.Sender.Modulus,
+				["exponent"] = message.Sender.Exponent
+			},
+			["text"] = message.Text,
+			["receiverEncryptedKey"] = message.ReceiverEncryptedKey
+		})), WebSocketMessageType.Text, true, CancellationToken.None);
 	}
 }

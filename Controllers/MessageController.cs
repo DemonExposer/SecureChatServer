@@ -124,10 +124,10 @@ public class MessageController : ControllerBase {
 		command.Parameters.AddWithValue("@signature", message.Signature);
 		command.ExecuteNonQuery();
 
-		BroadcastToWebsockets(message).Wait();
+		NotifyWebsocket(message).Wait();
 	}
 
-	private static async Task BroadcastToWebsockets(Message message) {
+	private static async Task NotifyWebsocket(Message message) {
 		bool webSocketExists = WebSocketController.Sockets.TryGetValue(message.Receiver.Modulus, out WebSocket? webSocket);
 		if (!webSocketExists || webSocket == null)
 			return;

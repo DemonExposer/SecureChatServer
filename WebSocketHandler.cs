@@ -22,12 +22,13 @@ public class WebSocketHandler {
 		int arrSize = 1024;
 		byte[] buffer = new byte[arrSize];
 
-		WebSocketReceiveResult result = null;
+		WebSocketReceiveResult? result = null;
 		do {
 			try {
 				result = await _webSocket.ReceiveAsync(buffer, CancellationToken.None);
 			} catch (Exception e) {
-				Console.WriteLine(e.ToString());
+				Console.WriteLine(e.ToString()); // TODO: handle this differently
+				return;
 			}
 			bytes.AddRange(buffer[..result.Count]);
 		} while (result.Count == arrSize);
@@ -35,6 +36,7 @@ public class WebSocketHandler {
 		string modulus = Encoding.UTF8.GetString(bytes.ToArray(), 0, bytes.Count);
 		WebSocketController.Sockets[modulus] = this;
 
+		// Imagine Microsoft making a good library... sadly this is the only way to make the websocket work
 		while (true) {
 			ManualResetEvent.WaitOne();
 			try {
@@ -51,22 +53,6 @@ public class WebSocketHandler {
 				Console.WriteLine(ex.ToString());
 			}
 			ManualResetEvent.Reset();
-		}
-	}
-
-	public async Task Send(Message message) {
-		try {
-			await _webSocket.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new JsonObject {
-				["signature"] = message.Signature,
-				["sender"] = new JsonObject {
-					["modulus"] = message.Sender.Modulus,
-					["exponent"] = message.Sender.Exponent
-				},
-				["text"] = message.Text,
-				["receiverEncryptedKey"] = message.ReceiverEncryptedKey
-			})), WebSocketMessageType.Text, true, CancellationToken.None);
-		} catch (Exception ex) {
-			Console.WriteLine(ex.ToString());
 		}
 	}
 }

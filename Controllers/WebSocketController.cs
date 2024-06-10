@@ -13,7 +13,7 @@ public class WebSocketController : ControllerBase {
 		if (HttpContext.WebSockets.IsWebSocketRequest) {
 			WebSocket webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
 			WebSocketHandler webSocketHandler = new (webSocket);
-			_ = webSocketHandler.Handle();
+			await webSocketHandler.Handle();
 		} else {
 			HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
 		}

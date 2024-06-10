@@ -1,4 +1,5 @@
 using System.Data.SQLite;
+using System.Linq.Expressions;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -124,23 +125,12 @@ public class MessageController : ControllerBase {
 		command.Parameters.AddWithValue("@signature", message.Signature);
 		command.ExecuteNonQuery();
 
-		NotifyWebsocket(message).Wait();
-	}
-
-	private static async Task NotifyWebsocket(Message message) {
-		bool webSocketExists = WebSocketController.Sockets.TryGetValue(message.Receiver.Modulus, out WebSocket? webSocket);
-		if (!webSocketExists || webSocket == null)
+		bool webSocketExists = WebSocketController.Sockets.TryGetValue(message.Receiver.Modulus, out WebSocketHandler? webSocketHandler);
+		if (!webSocketExists || webSocketHandler == null)
 			return;
 
 		// TODO: remove the websocket if the send fails
-		await webSocket.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new JsonObject {
-			["signature"] = message.Signature,
-			["sender"] = new JsonObject {
-				["modulus"] = message.Sender.Modulus,
-				["exponent"] = message.Sender.Exponent
-			},
-			["text"] = message.Text,
-			["receiverEncryptedKey"] = message.ReceiverEncryptedKey
-		})), WebSocketMessageType.Text, true, CancellationToken.None);
+		webSocketHandler.Message = message;
+		webSocketHandler.ManualResetEvent.Set();
 	}
 }

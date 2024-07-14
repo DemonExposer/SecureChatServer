@@ -1,16 +1,19 @@
 using System.Data.SQLite;
-using System.Linq.Expressions;
-using System.Net.WebSockets;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Math;
+using SecureChatServer.util;
 
 namespace SecureChatServer.Controllers;
 
 [ApiController]
 [Route("messages")]
 public class MessageController : ControllerBase {
+	public class DeleteRequestBody {
+		public long Id { get; set; }
+		public string Signature { get; set; }
+	}
+	
 	[HttpGet]
 	public Message[] Get(string requestingUserModulus, string requestingUserExponent, string requestedUserModulus, string requestedUserExponent) {
 		List<Message> res = new ();
@@ -58,6 +61,7 @@ public class MessageController : ControllerBase {
 
 					res.Add(
 						new Message {
+							Id = (long) reader["id"],
 							DateTime = DateTime.Now,
 							Text = (string) reader["body"],
 							ReceiverEncryptedKey = (string) reader["receiver_encrypted_key"],
@@ -75,7 +79,7 @@ public class MessageController : ControllerBase {
 	}
 
 	[HttpPost]
-	public void Post(Message message) {
+	public long Post(Message message) {
 		using SQLiteConnection connection = new (Constants.DbConnectionString);
 		connection.Open();
 
@@ -124,13 +128,53 @@ public class MessageController : ControllerBase {
 		command.Parameters.AddWithValue("@receiverEncKey", message.ReceiverEncryptedKey);
 		command.Parameters.AddWithValue("@signature", message.Signature);
 		command.ExecuteNonQuery();
+		
+		command.Parameters.Clear();
+
+		command.CommandText = "SELECT last_insert_rowid() AS id;";
+		long messageId;
+		using (SQLiteDataReader reader = command.ExecuteReader()) {
+			reader.Read();
+			messageId = (long) reader["id"];
+		}
 
 		bool webSocketExists = WebSocketController.Sockets.TryGetValue(message.Receiver.Modulus, out WebSocketHandler? webSocketHandler);
 		if (!webSocketExists || webSocketHandler == null)
-			return;
+			return messageId;
 
 		// TODO: remove the websocket if the send fails
 		webSocketHandler.Message = message;
 		webSocketHandler.ManualResetEvent.Set();
+
+		return messageId;
+	}
+
+	[HttpDelete]
+	public void Delete(DeleteRequestBody body) {
+		using SQLiteConnection connection = new (Constants.DbConnectionString);
+		connection.Open();
+
+		SQLiteCommand command = connection.CreateCommand();
+		command.CommandText = "SELECT messages.`id`, sender, users.`id`, modulus, exponent FROM messages LEFT JOIN users ON sender = users.`id` WHERE messages.`id` = @id;";
+		command.Parameters.AddWithValue("@id", body.Id);
+		
+		string modulus, exponent;
+		using (SQLiteDataReader reader = command.ExecuteReader()) {
+			// TODO: reject when .Read() returns false
+			reader.Read();
+			modulus = (string) reader["modulus"];
+			exponent = (string) reader["exponent"];
+		}
+
+		command.Parameters.Clear();
+		
+		// TODO: maybe send a timestamp as well to prevent replay attacks
+		if (!Cryptography.Verify(body.Id.ToString(), body.Signature, new RsaKeyParameters(false, new BigInteger(modulus, 16), new BigInteger(exponent, 16)))) {
+			return; // TODO: give an error code
+		}
+
+		command.CommandText = "DELETE FROM messages WHERE `id` = @id;";
+		command.Parameters.AddWithValue("@id", body.Id);
+		command.ExecuteNonQuery();
 	}
 }

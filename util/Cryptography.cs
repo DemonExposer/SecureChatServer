@@ -8,7 +8,6 @@ namespace SecureChatServer.util;
 
 public static class Cryptography {
 	public static bool Verify(string text, string signature, RsaKeyParameters publicKey) {
-		Console.WriteLine(signature);
 		byte[] textBytes = Encoding.UTF8.GetBytes(text);
 		byte[] signatureBytes = Convert.FromBase64String(signature);
 

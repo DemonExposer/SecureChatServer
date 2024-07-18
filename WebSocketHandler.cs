@@ -41,6 +41,7 @@ public class WebSocketHandler {
 			ManualResetEvent.WaitOne();
 			try {
 				await _webSocket.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new JsonObject {
+					["id"] = Message.Id,
 					["signature"] = Message.Signature,
 					["sender"] = new JsonObject {
 						["modulus"] = Message.Sender.Modulus,

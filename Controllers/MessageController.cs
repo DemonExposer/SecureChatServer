@@ -143,6 +143,7 @@ public class MessageController : ControllerBase {
 			return messageId;
 
 		// TODO: remove the websocket if the send fails
+		webSocketHandler.Action = WebSocketHandler.MessageAction.Add;
 		webSocketHandler.Message = message;
 		webSocketHandler.ManualResetEvent.Set();
 
@@ -155,26 +156,56 @@ public class MessageController : ControllerBase {
 		connection.Open();
 
 		SQLiteCommand command = connection.CreateCommand();
-		command.CommandText = "SELECT messages.`id`, sender, users.`id`, modulus, exponent FROM messages LEFT JOIN users ON sender = users.`id` WHERE messages.`id` = @id;";
+		command.CommandText = "SELECT messages.`id`, sender, receiver, users.`id`, modulus, exponent FROM messages LEFT JOIN users ON sender = users.`id` WHERE messages.`id` = @id;";
 		command.Parameters.AddWithValue("@id", body.Id);
 		
-		string modulus, exponent;
+		string senderModulus, senderExponent, receiverModulus;
+		long receiverId;
 		using (SQLiteDataReader reader = command.ExecuteReader()) {
 			// TODO: reject when .Read() returns false
 			reader.Read();
-			modulus = (string) reader["modulus"];
-			exponent = (string) reader["exponent"];
+			senderModulus = (string) reader["modulus"];
+			senderExponent = (string) reader["exponent"];
+			receiverId = (long) reader["receiver"];
 		}
 
 		command.Parameters.Clear();
 		
+		command.CommandText = "SELECT modulus FROM users WHERE `id` = @id";
+		command.Parameters.AddWithValue("@id", receiverId);
+		
+		using (SQLiteDataReader reader = command.ExecuteReader()) {
+			reader.Read();
+			receiverModulus = (string) reader["modulus"];
+		}
+		
+		command.Parameters.Clear();
+		
 		// TODO: maybe send a timestamp as well to prevent replay attacks
-		if (!Cryptography.Verify(body.Id.ToString(), body.Signature, new RsaKeyParameters(false, new BigInteger(modulus, 16), new BigInteger(exponent, 16)))) {
+		if (!Cryptography.Verify(body.Id.ToString(), body.Signature, new RsaKeyParameters(false, new BigInteger(senderModulus, 16), new BigInteger(senderExponent, 16)))) {
 			return; // TODO: give an error code
 		}
 
 		command.CommandText = "DELETE FROM messages WHERE `id` = @id;";
 		command.Parameters.AddWithValue("@id", body.Id);
 		command.ExecuteNonQuery();
+
+		Message message = new() {
+			Id = body.Id,
+			Sender = new User {
+				Modulus = senderModulus,
+				Exponent = senderExponent
+			}
+		};
+		
+		bool webSocketExists = WebSocketController.Sockets.TryGetValue(receiverModulus, out WebSocketHandler? webSocketHandler);
+		if (!webSocketExists || webSocketHandler == null)
+			return;
+
+		// TODO: remove the websocket if the send fails
+		webSocketHandler.Action = WebSocketHandler.MessageAction.Delete;
+		webSocketHandler.Message = message;
+		webSocketHandler.ManualResetEvent.Set();
+
 	}
 }

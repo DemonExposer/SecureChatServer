@@ -13,6 +13,14 @@ public class WebSocketHandler {
 
 	public Message Message;
 
+	public enum MessageAction {
+		Add,
+		Delete,
+		Invalid
+	}
+	
+	public MessageAction Action = MessageAction.Invalid;
+
 	public WebSocketHandler(WebSocket webSocket) {
 		_webSocket = webSocket;
 	}
@@ -40,19 +48,41 @@ public class WebSocketHandler {
 		while (true) {
 			ManualResetEvent.WaitOne();
 			try {
-				await _webSocket.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new JsonObject {
-					["id"] = Message.Id,
-					["signature"] = Message.Signature,
-					["sender"] = new JsonObject {
-						["modulus"] = Message.Sender.Modulus,
-						["exponent"] = Message.Sender.Exponent
-					},
-					["text"] = Message.Text,
-					["receiverEncryptedKey"] = Message.ReceiverEncryptedKey
-				})), WebSocketMessageType.Text, true, CancellationToken.None);
+				JsonObject? messageObj = null;
+				switch (Action) {
+					case MessageAction.Add:
+						messageObj = new JsonObject {
+							["action"] = "add",
+							["id"] = Message.Id,
+							["signature"] = Message.Signature,
+							["sender"] = new JsonObject {
+								["modulus"] = Message.Sender.Modulus,
+								["exponent"] = Message.Sender.Exponent
+							},
+							["text"] = Message.Text,
+							["receiverEncryptedKey"] = Message.ReceiverEncryptedKey
+						};
+						break;
+					case MessageAction.Delete:
+						messageObj = new JsonObject {
+							["action"] = "delete",
+							["id"] = Message.Id,
+							["sender"] = new JsonObject {
+								["modulus"] = Message.Sender.Modulus,
+								["exponent"] = Message.Sender.Exponent
+							}
+						};
+						break;
+					case MessageAction.Invalid:
+						throw new InvalidOperationException("Websocket action was not specified");
+				}
+				
+				await _webSocket.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(messageObj)), WebSocketMessageType.Text, true, CancellationToken.None);
 			} catch (Exception ex) {
 				Console.WriteLine(ex.ToString());
 			}
+
+			Action = MessageAction.Invalid;
 			ManualResetEvent.Reset();
 		}
 	}

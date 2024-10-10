@@ -132,22 +132,21 @@ public class MessageController : ControllerBase {
 		command.Parameters.Clear();
 
 		command.CommandText = "SELECT last_insert_rowid() AS id;";
-		long messageId;
 		using (SQLiteDataReader reader = command.ExecuteReader()) {
 			reader.Read();
-			messageId = (long) reader["id"];
+			message.Id = (long) reader["id"];
 		}
 
 		bool webSocketExists = WebSocketController.Sockets.TryGetValue(message.Receiver.Modulus, out WebSocketHandler? webSocketHandler);
 		if (!webSocketExists || webSocketHandler == null)
-			return messageId;
+			return message.Id;
 
 		// TODO: remove the websocket if the send fails
 		webSocketHandler.Action = WebSocketHandler.MessageAction.Add;
 		webSocketHandler.Message = message;
 		webSocketHandler.ManualResetEvent.Set();
 
-		return messageId;
+		return message.Id;
 	}
 
 	[HttpDelete]

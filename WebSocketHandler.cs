@@ -60,7 +60,8 @@ public class WebSocketHandler {
 								["exponent"] = Message.Sender.Exponent
 							},
 							["text"] = Message.Text,
-							["receiverEncryptedKey"] = Message.ReceiverEncryptedKey
+							["receiverEncryptedKey"] = Message.ReceiverEncryptedKey,
+							["isRead"] = Message.IsRead
 						};
 						break;
 					case MessageAction.Delete:

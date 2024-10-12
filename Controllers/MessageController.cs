@@ -68,7 +68,8 @@ public class MessageController : ControllerBase {
 							SenderEncryptedKey = (string) reader["sender_encrypted_key"],
 							Signature = (string) reader["signature"],
 							Sender = new User { Modulus = senderModulus, Exponent = senderExponent },
-							Receiver = new User { Modulus = receiverModulus, Exponent = receiverExponent }
+							Receiver = new User { Modulus = receiverModulus, Exponent = receiverExponent },
+							IsRead = (long) reader["is_read"] != 0
 						}
 					);
 				}
@@ -142,6 +143,7 @@ public class MessageController : ControllerBase {
 			return message.Id;
 
 		// TODO: remove the websocket if the send fails
+		message.IsRead = false;
 		webSocketHandler.Action = WebSocketHandler.MessageAction.Add;
 		webSocketHandler.Message = message;
 		webSocketHandler.ManualResetEvent.Set();

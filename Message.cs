@@ -9,11 +9,13 @@ public class Message {
     
 	public string Text { get; set; }
 
-	public string SenderEncryptedKey {  get; set; }
+	public string SenderEncryptedKey { get; set; }
 
-	public string ReceiverEncryptedKey {  get; set; }
+	public string ReceiverEncryptedKey { get; set; }
+	
+	public bool IsRead { get; set; }
 
-	public string Signature {  get; set; }
+	public string Signature { get; set; }
 	
 	public DateTime DateTime { get; set; }
 }

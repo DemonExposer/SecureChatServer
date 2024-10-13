@@ -29,6 +29,11 @@ if (app.Environment.IsDevelopment()) {
 	app.UseSwaggerUI();
 }
 
+app.Use((context, next) => {
+	context.Request.EnableBuffering();
+	return next();
+});
+
 app.UseHttpsRedirection();
 
 app.UseWebSockets();

@@ -15,7 +15,7 @@ public class MessageController : ControllerBase {
 	}
 	
 	[HttpGet]
-	public Message[] Get(string requestingUserModulus, string requestingUserExponent, string requestedUserModulus, string requestedUserExponent) {
+	public ActionResult<Message[]> Get(string requestingUserModulus, string requestingUserExponent, string requestedUserModulus, string requestedUserExponent) {
 		List<Message> res = new ();
 		using (SQLiteConnection connection = new (Constants.DbConnectionString)) {
 			connection.Open();
@@ -36,7 +36,7 @@ public class MessageController : ControllerBase {
 						requestedUserId = (long) reader["id"];
 
 			if (requestingUserId == -1 || requestedUserId == -1)
-				return res.ToArray();
+				return Ok(res.ToArray());
 
 			command.Parameters.Clear();
 
@@ -76,13 +76,29 @@ public class MessageController : ControllerBase {
 			}
 		}
 
-		return res.ToArray();
+		return Ok(res.ToArray());
 	}
 
 	[HttpPost]
-	public long Post(Message message) {
+	public ActionResult<long> Post(Message message) {
 		using SQLiteConnection connection = new (Constants.DbConnectionString);
 		connection.Open();
+		
+		if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - message.Timestamp > 10000) {
+			return Unauthorized(-1); // TODO: specify that it's a timestamp issue
+		}
+		
+		Request.Body.Position = 0;
+		
+		string signature = Request.Headers["Signature"].ToString();
+		string requestBody;
+		using (StreamReader reader = new (Request.Body)) {
+			requestBody = reader.ReadToEnd();
+			Request.Body.Position = 0;
+		}
+		if (!Cryptography.Verify(requestBody, signature, new RsaKeyParameters(false, new BigInteger(message.Sender.Modulus, 16), new BigInteger(message.Sender.Exponent, 16)))) {
+			return Unauthorized(-1);
+		}
 
 		SQLiteCommand command = connection.CreateCommand();
 		command.CommandText = "INSERT OR IGNORE INTO users (modulus, exponent) VALUES (@modulus, @exponent);";
@@ -140,7 +156,7 @@ public class MessageController : ControllerBase {
 
 		bool webSocketExists = WebSocketController.Sockets.TryGetValue(message.Receiver.Modulus, out WebSocketHandler? webSocketHandler);
 		if (!webSocketExists || webSocketHandler == null)
-			return message.Id;
+			return Ok(message.Id);
 
 		// TODO: remove the websocket if the send fails
 		message.IsRead = false;
@@ -148,11 +164,11 @@ public class MessageController : ControllerBase {
 		webSocketHandler.Message = message;
 		webSocketHandler.ManualResetEvent.Set();
 
-		return message.Id;
+		return Ok(message.Id);
 	}
 
 	[HttpDelete]
-	public void Delete(DeleteRequestBody body) {
+	public ActionResult Delete(DeleteRequestBody body) {
 		using SQLiteConnection connection = new (Constants.DbConnectionString);
 		connection.Open();
 
@@ -184,7 +200,7 @@ public class MessageController : ControllerBase {
 		
 		// TODO: maybe send a timestamp as well to prevent replay attacks
 		if (!Cryptography.Verify(body.Id.ToString(), body.Signature, new RsaKeyParameters(false, new BigInteger(senderModulus, 16), new BigInteger(senderExponent, 16)))) {
-			return; // TODO: give an error code
+			return Unauthorized();
 		}
 
 		command.CommandText = "DELETE FROM messages WHERE `id` = @id;";
@@ -201,12 +217,13 @@ public class MessageController : ControllerBase {
 		
 		bool webSocketExists = WebSocketController.Sockets.TryGetValue(receiverModulus, out WebSocketHandler? webSocketHandler);
 		if (!webSocketExists || webSocketHandler == null)
-			return;
+			return Ok();
 
 		// TODO: remove the websocket if the send fails
 		webSocketHandler.Action = WebSocketHandler.MessageAction.Delete;
 		webSocketHandler.Message = message;
 		webSocketHandler.ManualResetEvent.Set();
 
+		return Ok();
 	}
 }

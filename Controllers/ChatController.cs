@@ -10,17 +10,17 @@ namespace SecureChatServer.Controllers;
 [Route("chats")]
 public class ChatController : ControllerBase {
 	[HttpGet]
-	public Chat[] Get(string modulus, string exponent, long timestamp) {
+	public ActionResult<Chat[]> Get(string modulus, string exponent, long timestamp) {
 		List<Chat> result = new ();
 		
 		if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - timestamp > 10000) {
-			return result.ToArray(); // TODO: give an error code
+			return Unauthorized(result.ToArray()); // TODO: specify that it's a timestamp issue
 		}
 
 		string signature = Request.Headers["Signature"].ToString();
 		string queryString = Request.QueryString.Value![1..];
 		if (!Cryptography.Verify(queryString, signature, new RsaKeyParameters(false, new BigInteger(modulus, 16), new BigInteger(exponent, 16)))) {
-			return result.ToArray(); // TODO: give an error code
+			return Unauthorized(result.ToArray());
 		}
 		
 		using SQLiteConnection connection = new (Constants.DbConnectionString);
@@ -63,6 +63,6 @@ public class ChatController : ControllerBase {
 			}
 		}
 
-		return result.ToArray();
+		return Ok(result.ToArray());
 	}
 }

@@ -18,9 +18,9 @@ public class MakeChatReadController : ControllerBase {
 	}
 
 	[HttpPost]
-	public async Task Post(MakeChatReadObject data) {
+	public ActionResult Post(MakeChatReadObject data) {
 		if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - data.Timestamp > 10000) {
-			return; // TODO: give an error code
+			return Unauthorized(); // TODO: specify that it's a timestamp issue
 		}
 
 		Request.Body.Position = 0;
@@ -28,14 +28,14 @@ public class MakeChatReadController : ControllerBase {
 		string signature = Request.Headers["Signature"].ToString();
 		string requestBody;
 		using (StreamReader reader = new (Request.Body)) {
-			requestBody = await reader.ReadToEndAsync();
+			requestBody = reader.ReadToEnd();
 			Request.Body.Position = 0;
 		}
 		if (!Cryptography.Verify(requestBody, signature, new RsaKeyParameters(false, new BigInteger(data.Receiver.Modulus, 16), new BigInteger(data.Receiver.Exponent, 16)))) {
-			return; // TODO: give an error code
+			return Unauthorized();
 		}
 
-		await using SQLiteConnection connection = new (Constants.DbConnectionString);
+		using SQLiteConnection connection = new (Constants.DbConnectionString);
 		connection.Open();
 
 		SQLiteCommand command = connection.CreateCommand();
@@ -48,5 +48,7 @@ public class MakeChatReadController : ControllerBase {
 		command.Parameters.AddWithValue("@foreignExponent", data.Sender.Exponent);
 		
 		command.ExecuteNonQuery();
+
+		return Ok();
 	}
 }

@@ -18,4 +18,6 @@ public class Message {
 	public string Signature { get; set; }
 	
 	public DateTime DateTime { get; set; }
+	
+	public long Timestamp { get; set; }
 }

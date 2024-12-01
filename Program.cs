@@ -1,4 +1,7 @@
 using System.Data.SQLite;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
 using (SQLiteConnection connection = new (SecureChatServer.Constants.DbConnectionString)) {
 	connection.Open();
@@ -42,4 +45,30 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+UdpClient socket = new (5001);
+Dictionary<IPEndPoint, VoiceClient> connections = new ();
+Dictionary<string, IPEndPoint> addresses = new ();
+// TODO: encrypt, verify and make more efficient
+Task.Run(() => {
+	while (true) try {
+		IPEndPoint endPoint = new (IPAddress.Any, 5001);
+		byte[] data = socket.Receive(ref endPoint);
+		if (connections.TryGetValue(endPoint, out VoiceClient voiceClient)) {
+			if (addresses.ContainsKey(voiceClient.ForeignModulus))
+				socket.Send(data, data.Length, addresses[voiceClient.ForeignModulus]);
+		} else {
+			string[] message = Encoding.UTF8.GetString(data).Split("-");
+			connections[endPoint] = new VoiceClient { PersonalModulus = message[0], ForeignModulus = message[1] };
+			addresses[message[0]] = endPoint;
+		}
+	} catch (Exception e) {
+		Console.WriteLine(e);
+	}
+});
+
 app.Run();
+
+class VoiceClient {
+	public string PersonalModulus { get; set; }
+	public string ForeignModulus { get; set; }
+}

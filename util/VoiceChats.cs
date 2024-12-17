@@ -17,6 +17,10 @@ public class VoiceChats {
 		Addresses[personalKey] = endPoint;
 	}
 
+	public static void AddForeignEndpoint(IPEndPoint endPoint, RsaKeyParameters foreignKey) => Addresses[foreignKey] = endPoint;
+	
+	public static bool Exists(RsaKeyParameters key) => Addresses.ContainsKey(key);
+
 	public static bool TryGet(IPEndPoint personalEndPoint, out IPEndPoint? foreignEndPoint) {
 		if (Connections.TryGetValue(personalEndPoint, out VoiceConnection? voiceConnection)) {
 			if (Addresses.TryGetValue(voiceConnection.ForeignKey, out IPEndPoint? address)) {
